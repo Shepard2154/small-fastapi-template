@@ -59,20 +59,17 @@ class MessageProcessor:
 
 app = FastAPI()
 
-# @inject
-# @app.get("/items", response_model=list[Item])
-# async def get_items(
-#     service: ItemService = FastDepends(get_item_service)
-# ) -> Any:
-#     return service.get_items()
+@app.get("/items", response_model=list[Item])
+async def get_items() -> Any:
+    service = get_item_service()
+    return service.get_items()
 
-# @app.get("/items/{item_id}", response_model=Item)
-# @inject
-# async def get_item(
-#     item_id: int,
-#     service: ItemService = FastDepends(get_item_service)
-# ):
-#     return service.get_item(item_id)
+@app.get("/items/{item_id}", response_model=Item)
+async def get_item(
+    item_id: int,
+):
+    service = get_item_service()
+    return service.get_item(item_id)
 
 @app.get("/process-message")
 async def process_message(
