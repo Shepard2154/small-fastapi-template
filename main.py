@@ -1,8 +1,39 @@
-from fastapi import FastAPI, HTTPException
-from fast_depends import inject, Depends as FastDepends
-from pydantic import BaseModel
-from typing import List, Optional, Any
+import logging
+from typing import Any, List, Optional
 
+from fast_depends import Depends as FastDepends
+from fast_depends import inject
+from fastapi import FastAPI, HTTPException
+from opentelemetry import _logs
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.resources import Resource
+from pydantic import BaseModel
+
+resource = Resource.create(attributes={
+    "service.name": "small-fastapi-template",
+    "environment": "dev"
+})
+
+logger_provider = LoggerProvider(resource=resource)
+_logs.set_logger_provider(logger_provider)
+
+otlp_exporter = OTLPLogExporter(
+    endpoint="http://localhost:4317",
+    insecure=True
+)
+
+logger_provider.add_log_record_processor(
+    BatchLogRecordProcessor(otlp_exporter)
+)
+
+handler = LoggingHandler(logger_provider=logger_provider)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(handler)
+
+app = FastAPI()
 
 class Item(BaseModel):
     id: int
@@ -57,27 +88,41 @@ class MessageProcessor:
         return f"{message}. Available items: {item_names}"
 
 
-app = FastAPI()
-
 @app.get("/items", response_model=list[Item])
 async def get_items() -> Any:
+    logger.debug("items receiving...")
     service = get_item_service()
+    logger.info("items received")
     return service.get_items()
 
 @app.get("/items/{item_id}", response_model=Item)
 async def get_item(
     item_id: int,
 ):
+    logger.debug("item %s receiving...", item_id)
     service = get_item_service()
+    logger.info("item received")
     return service.get_item(item_id)
 
 @app.get("/process-message")
 async def process_message(
     message: str = "Hello",
 ) -> dict:
+    logger.debug("Start processing...")
     processor = MessageProcessor()
+    logger.info("Processed")
     return {"msg": processor.process_with_items(message)}
+
+
+def timestamp_log_config(uvicorn_log_config):
+    datefmt = '%Y-%m-%d %H:%M:%S'
+    if 'formatters' in uvicorn_log_config:
+        uvicorn_log_config['formatters']['default']['fmt'] = '%(levelprefix)s [%(asctime)s] %(message)s'
+        uvicorn_log_config['formatters']['default']['datefmt'] = datefmt
+    return uvicorn_log_config
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    from uvicorn.config import LOGGING_CONFIG
+    config = timestamp_log_config(LOGGING_CONFIG.copy())
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_config=config)
