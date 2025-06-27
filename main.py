@@ -3,6 +3,8 @@ from fast_depends import inject, Depends as FastDepends
 from pydantic import BaseModel
 from typing import List, Optional, Any
 
+import logging
+
 
 class Item(BaseModel):
     id: int
@@ -59,25 +61,49 @@ class MessageProcessor:
 
 app = FastAPI()
 
+logger = logging.getLogger("uvicorn")
+logger.setLevel(logging.DEBUG)
+# logger = logging.getLogger()
+# logger.setLevel(logging.NOTSET)
+# handler = logging.StreamHandler()
+# handler.setLevel(logging.DEBUG)
+# logger.addHandler(handler)
+
 @app.get("/items", response_model=list[Item])
 async def get_items() -> Any:
+    logger.debug("items receiving...")
     service = get_item_service()
+    logger.info("items received")
     return service.get_items()
 
 @app.get("/items/{item_id}", response_model=Item)
 async def get_item(
     item_id: int,
 ):
+    logger.debug("item %s receiving...", item_id)
     service = get_item_service()
+    logger.info("item received")
     return service.get_item(item_id)
 
 @app.get("/process-message")
 async def process_message(
     message: str = "Hello",
 ) -> dict:
+    logger.debug("Start processing...")
     processor = MessageProcessor()
+    logger.info("Processed")
     return {"msg": processor.process_with_items(message)}
+
+
+def timestamp_log_config(uvicorn_log_config):
+    datefmt = '%Y-%m-%d %H:%M:%S'
+    if 'formatters' in uvicorn_log_config:
+        uvicorn_log_config['formatters']['default']['fmt'] = '%(levelprefix)s [%(asctime)s] %(message)s'
+        uvicorn_log_config['formatters']['default']['datefmt'] = datefmt
+    return uvicorn_log_config
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    from uvicorn.config import LOGGING_CONFIG
+    config = timestamp_log_config(LOGGING_CONFIG.copy())
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_config=config)
