@@ -1,10 +1,39 @@
-from fastapi import FastAPI, HTTPException
-from fast_depends import inject, Depends as FastDepends
-from pydantic import BaseModel
-from typing import List, Optional, Any
-
 import logging
+from typing import Any, List, Optional
 
+from fast_depends import Depends as FastDepends
+from fast_depends import inject
+from fastapi import FastAPI, HTTPException
+from opentelemetry import _logs
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.resources import Resource
+from pydantic import BaseModel
+
+resource = Resource.create(attributes={
+    "service.name": "small-fastapi-template",
+    "environment": "dev"
+})
+
+logger_provider = LoggerProvider(resource=resource)
+_logs.set_logger_provider(logger_provider)
+
+otlp_exporter = OTLPLogExporter(
+    endpoint="http://localhost:4317",
+    insecure=True
+)
+
+logger_provider.add_log_record_processor(
+    BatchLogRecordProcessor(otlp_exporter)
+)
+
+handler = LoggingHandler(logger_provider=logger_provider)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(handler)
+
+app = FastAPI()
 
 class Item(BaseModel):
     id: int
@@ -58,16 +87,6 @@ class MessageProcessor:
         item_names = ", ".join([item.name for item in items])
         return f"{message}. Available items: {item_names}"
 
-
-app = FastAPI()
-
-logger = logging.getLogger("uvicorn")
-logger.setLevel(logging.DEBUG)
-# logger = logging.getLogger()
-# logger.setLevel(logging.NOTSET)
-# handler = logging.StreamHandler()
-# handler.setLevel(logging.DEBUG)
-# logger.addHandler(handler)
 
 @app.get("/items", response_model=list[Item])
 async def get_items() -> Any:
