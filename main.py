@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from fast_depends import Depends as FastDepends
 from fast_depends import inject
@@ -47,7 +47,7 @@ class ItemRepository:
             Item(id=2, name="Second Item")
         ]
     
-    def get_all_items(self) -> List[Item]:
+    def get_all_items(self) -> list[Item]:
         return self._items
     
     def get_item_by_id(self, item_id: int) -> Optional[Item]:
@@ -58,7 +58,7 @@ class ItemService:
     def __init__(self, repository: ItemRepository):
         self._repo = repository
     
-    def get_items(self) -> List[Item]:
+    def get_items(self) -> list[Item]:
         return self._repo.get_all_items()
     
     def get_item(self, item_id: int) -> Item:
